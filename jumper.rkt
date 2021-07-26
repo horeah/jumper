@@ -1,5 +1,4 @@
 #lang racket/gui
-(current-directory "C:\\Users\\Horea\\QTronic")
 
 (define frame (new frame%
                    [label "Jumper"]
@@ -46,12 +45,19 @@
 
 (send frame show #t)
 
+(define access #t)
 (thread (lambda ()
           (fold-files
            (lambda (path type result)
              (if (string-contains? (path->string path) filter-value)
                  (send entries append (path->entry path))
                  null)
-             (set! all-files (append all-files (list path))))
+             (set! all-files (append all-files (list path)))
+             (set! access #t)
+             (if (equal? type 'dir)
+                 (with-handlers ([exn? (lambda (exn) (set! access #f))])
+                   (directory-list path))
+                 null)
+             (values null access))
            (list))
           (writeln "Done loading")))
