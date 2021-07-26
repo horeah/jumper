@@ -1,4 +1,5 @@
 #lang racket/gui
+(current-directory "C:\\Users\\Horea\\QTronic")
 
 (define frame (new frame%
                    [label "Jumper"]
@@ -13,23 +14,28 @@
 
 (define (update-list)
   (define updated-entries
-    (filter (lambda (filename) (string-contains? filename (send filter-text get-value)))
+    (filter (lambda (filename) (string-contains? filename filter-value))
             (map path->entry all-files)))
   (send entries set updated-entries)
   (with-handlers ([exn:fail:contract? (lambda (exn) null)])
     (send entries select 0)))
 
+(define filter-value "")
+
 (define filter-text
   (new text-field%
        [label "Jump To"]
        [callback (lambda (text event)
-                   (if (equal? (send event get-event-type) 'text-field-enter)
-                       (begin
-                         (system (string-join (list "explorer"
-                                                    (send entries get-string (send entries get-selection)))))
-                         (exit))
-                       (update-list)))]
-
+                   (case (send event get-event-type)
+                     ['text-field-enter
+                      (begin
+                        (system (string-join (list "explorer"
+                                                   (send entries get-string (send entries get-selection)))))
+                        (exit))]
+                     ['text-field
+                      (begin
+                        (set! filter-value (send filter-text get-value))
+                        (update-list))]))]
        [parent frame]))
 
 (define entries (new list-box%
@@ -42,10 +48,10 @@
 
 (thread (lambda ()
           (fold-files
-           (lambda (path type result) (begin
-                                        (if (string-contains? (path->string path) (send filter-text get-value))
-                                            (send entries append (path->entry path))
-                                            null)
-                                        (set! all-files (append all-files (list path)))
-                                        (sleep)))
-           (list))))
+           (lambda (path type result)
+             (if (string-contains? (path->string path) filter-value)
+                 (send entries append (path->entry path))
+                 null)
+             (set! all-files (append all-files (list path))))
+           (list))
+          (writeln "Done loading")))
