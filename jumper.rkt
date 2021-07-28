@@ -60,7 +60,28 @@
 
 (send frame show #t)
 
-(define access #t)
+(define EXCLUDED-PATHS
+  (append
+   (map string->path (list
+                      (getenv "PROGRAMFILES")
+                      (getenv "PROGRAMFILES(X86)")
+                      (getenv "APPDATA")
+                      (getenv "LOCALAPPDATA")
+                      "C:\\$RECYCLE.BIN"
+                      "C:\\$WinREAgent"
+                      "C:\\DumpStack.log.tmp"))
+   (list
+    (path->complete-path (build-path (string->path (getenv "APPDATA")) 'up (string->path "LocalLow")))
+    (find-system-path 'temp-dir)
+    (find-system-path 'sys-dir))))
+
+(define (exclude-path? path)
+  (or
+   (member (path->complete-path path) EXCLUDED-PATHS)
+   (let-values ([(base name must-be-dir) (split-path path)])
+     (equal? (string-ref (path->string name) 0) #\.))))
+
+(define have-access #t)
 (thread (lambda ()
           (fold-files
            (lambda (path type result)
@@ -72,11 +93,11 @@
                     (send entries append SHOW-MORE)])
                  null)
              (set! all-files (append all-files (list path)))
-             (set! access #t)
+             (set! have-access #t)
              (if (equal? type 'dir)
-                 (with-handlers ([exn? (lambda (exn) (set! access #f))])
+                 (with-handlers ([exn? (lambda (exn) (set! have-access #f))])
                    (directory-list path))
                  null)
-             (values null access))  ; only mark for traversal if we were able to get access
+             (values null (and have-access (not (exclude-path? path)))))
            (list))
           (debug "Done loading")))
