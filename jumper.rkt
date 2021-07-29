@@ -1,9 +1,6 @@
 #lang racket/gui
-(current-directory (find-system-path 'home-dir))
 
-(define (debug text)
-  (writeln text)
-  (flush-output))
+(define (debug text) (writeln text) (flush-output))
 
 (define frame (new frame%
                    [label "Jumper"]
@@ -61,30 +58,41 @@
 (send frame show #t)
 
 (define EXCLUDED-PATHS
-  (append
-   (map string->path (list
-                      (getenv "PROGRAMFILES")
-                      (getenv "PROGRAMFILES(X86)")
-                      (getenv "APPDATA")
-                      (getenv "LOCALAPPDATA")
-                      "C:\\$RECYCLE.BIN"
-                      "C:\\$WinREAgent"
-                      "C:\\DumpStack.log.tmp"))
-   (list
-    (path->complete-path (build-path (string->path (getenv "APPDATA")) 'up (string->path "LocalLow")))
-    (find-system-path 'temp-dir)
-    (find-system-path 'sys-dir))))
+  (map normal-case-path (map string->path (list
+                                           (getenv "ProgramFiles")
+                                           (getenv "ProgramFiles(X86)")
+                                           (getenv "ProgramData")
+                                           (getenv "APPDATA")
+                                           (getenv "LOCALAPPDATA")
+                                           (string-append (getenv "APPDATA") "\\..\\" "LocalLow")
+                                           (getenv "TEMP")
+                                           (getenv "SystemRoot")
+                                           "C:\\Users\\Default"
+                                           "C:\\$RECYCLE.BIN"
+                                           "C:\\$WinREAgent"))))
 
 (define (exclude-path? path)
   (or
-   (member (path->complete-path path) EXCLUDED-PATHS)
+   (member (normal-case-path (path->complete-path path)) EXCLUDED-PATHS)
    (let-values ([(base name must-be-dir) (split-path path)])
      (equal? (string-ref (path->string name) 0) #\.))))
 
-(define have-access #t)
+(define (traverse-robust proc dive? start)
+  (define entries (with-handlers ([exn? (lambda (exn) '())])
+                    (map (lambda (entry) (build-path start entry))
+                         (directory-list start))))
+  (for ([entry entries])
+    (proc entry)
+    (if (and
+         (equal? (file-or-directory-type entry) 'directory)
+         (dive? entry))
+        (traverse-robust proc dive? entry)
+        null)))
+
 (thread (lambda ()
-          (fold-files
-           (lambda (path type result)
+          (define start-time (current-seconds))
+          (traverse-robust
+           (lambda (path)
              (if (string-contains? (path->string path) filter-value)
                  (cond
                    [(< (send entries get-number) MAX-ENTRIES)
@@ -92,12 +100,8 @@
                    [(= (send entries get-number) MAX-ENTRIES)
                     (send entries append SHOW-MORE)])
                  null)
-             (set! all-files (append all-files (list path)))
-             (set! have-access #t)
-             (if (equal? type 'dir)
-                 (with-handlers ([exn? (lambda (exn) (set! have-access #f))])
-                   (directory-list path))
-                 null)
-             (values null (and have-access (not (exclude-path? path)))))
-           (list))
-          (debug "Done loading")))
+             (set! all-files (append all-files (list path))))
+           (lambda (path) (not (exclude-path? path)))
+           (string->path "C:\\"))
+          (writeln (- (current-seconds) start-time))))
+
