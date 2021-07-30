@@ -2,10 +2,24 @@
 
 (define (debug text) (writeln text) (flush-output))
 
-(define frame (new frame%
-                   [label "Jumper"]
-                   [min-width 300]
-                   [min-height 400]))
+(define app-frame%
+  (class frame%
+    (super-new
+     [label "Jumper"] [min-width 300] [min-height 400])
+    (define/override (on-subwindow-char receiver event)
+      (define selection (send entries get-selection))
+      (define (select-bounded selection)
+        (send entries select (min (max 0 selection) (- (send entries get-number) 1))))
+      (if (and selection (not (send event get-shift-down)))
+          (case (send event get-key-code)
+            ['down (select-bounded (+ selection 1))]
+            ['up (select-bounded (- selection 1))]
+            ['next (select-bounded (+ selection (send entries number-of-visible-items)))]
+            ['prior (select-bounded (- selection (send entries number-of-visible-items)))]
+            [else #f])
+          #f))))
+
+(define frame (new app-frame%))
 
 (define all-files (list))
 (define MAX-ENTRIES 100)
@@ -20,8 +34,8 @@
     (filter (lambda (filename) (string-contains? filename filter-value))
             (map path->entry all-files)))
   (send entries set (if (< (length updated-entries) MAX-ENTRIES)
-                           updated-entries
-                           (append (take updated-entries MAX-ENTRIES) (list SHOW-MORE))))
+                        updated-entries
+                        (append (take updated-entries MAX-ENTRIES) (list SHOW-MORE))))
   (with-handlers ([exn:fail:contract? (lambda (exn) null)])
     (send entries select 0)))
 
@@ -56,6 +70,7 @@
 (send entries clear)
 
 (send frame show #t)
+(send filter-text focus)
 
 (define EXCLUDED-PATHS
   (map normal-case-path (map string->path (list
@@ -96,7 +111,8 @@
              (if (string-contains? (path->string path) filter-value)
                  (cond
                    [(< (send entries get-number) MAX-ENTRIES)
-                    (send entries append (path->entry path))]
+                    (send entries append (path->entry path))
+                    (when (= (send entries get-number) 1) (send entries select 0))]
                    [(= (send entries get-number) MAX-ENTRIES)
                     (send entries append SHOW-MORE)])
                  null)
@@ -104,4 +120,3 @@
            (lambda (path) (not (exclude-path? path)))
            (string->path "C:\\"))
           (writeln (- (current-seconds) start-time))))
-
