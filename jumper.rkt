@@ -40,7 +40,7 @@
                #:break (= num-entries MAX-ENTRIES))
       (set! num-entries (add1 num-entries))
       path))
-  (define filtered-entries (map path->string filtered-files))
+  (define filtered-entries (map path->entry filtered-files))
   (when (= num-entries MAX-ENTRIES)
     (set! filtered-entries (append filtered-entries (list SHOW-MORE))))
   (send entries set filtered-entries)
