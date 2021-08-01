@@ -29,17 +29,24 @@
   (define path-string (path->string path))
   (substring path-string 0 (min 199 (string-length path-string))))
 
-(define (update-list)
-  (define updated-entries
-    (filter (lambda (filename) (string-contains? filename filter-value))
-            (map path->entry all-files)))
-  (send entries set (if (< (length updated-entries) MAX-ENTRIES)
-                        updated-entries
-                        (append (take updated-entries MAX-ENTRIES) (list SHOW-MORE))))
-  (with-handlers ([exn:fail:contract? (lambda (exn) null)])
-    (send entries select 0)))
+(define (file-matches-filter? path)
+  (regexp-match filter-pattern (string-downcase (path->string path))))
 
-(define filter-value "")
+(define (update-list)
+  (define num-entries 0)
+  (define filtered-files
+    (for/list ([path all-files]
+               #:when (file-matches-filter? path)
+               #:break (= num-entries MAX-ENTRIES))
+      (set! num-entries (add1 num-entries))
+      path))
+  (define filtered-entries (map path->string filtered-files))
+  (when (= num-entries MAX-ENTRIES)
+    (set! filtered-entries (append filtered-entries (list SHOW-MORE))))
+  (send entries set filtered-entries)
+  (when (> num-entries 0) (send entries select 0)))
+
+(define filter-pattern (regexp ""))
 
 (define filter-text
   (new text-field%
@@ -58,7 +65,12 @@
                               (exit))))]
                      ['text-field
                       (begin
-                        (set! filter-value (send filter-text get-value))
+                        (set!
+                         filter-pattern
+                         (regexp (string-join
+                                  (map (lambda (s) (string-append "(" s ")"))
+                                       (string-split (string-downcase (send filter-text get-value))))
+                                  ".*")))
                         (update-list))]))]
        [parent frame]))
 
@@ -108,14 +120,13 @@
           (define start-time (current-seconds))
           (traverse-robust
            (lambda (path)
-             (if (string-contains? (path->string path) filter-value)
+             (when (file-matches-filter? path)
                  (cond
                    [(< (send entries get-number) MAX-ENTRIES)
                     (send entries append (path->entry path))
                     (when (= (send entries get-number) 1) (send entries select 0))]
                    [(= (send entries get-number) MAX-ENTRIES)
-                    (send entries append SHOW-MORE)])
-                 null)
+                    (send entries append SHOW-MORE)]))
              (set! all-files (append all-files (list path))))
            (lambda (path) (not (exclude-path? path)))
            (string->path "C:\\"))
