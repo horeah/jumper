@@ -134,41 +134,45 @@
   (with-handlers ([exn? (lambda (e) (writeln "Warning: Could not load history file!") (make-hash))])
     (deserialize (read (open-input-file HISTORY-FILE)))))
 
-(define all-files (sort
-                   (hash-keys history)
-                   (lambda (path1 path2) (> (hash-ref history path1) (hash-ref history path2)))))
+(define sorted-history-paths
+  (sort (hash-keys history)
+        (lambda (path1 path2) (> (hash-ref history path1) (hash-ref history path2)))))
+
+(define all-files sorted-history-paths)
 (send entries set (map path->entry all-files))
 
 (define (traverse-robust proc dive? start)
   (define entries (with-handlers ([exn? (lambda (exn) '())])
                     (map (lambda (entry) (build-path start entry))
                          (directory-list start))))
-  (for ([entry (sort entries (lambda (path1 path2)
-                               (> (hash-ref history path1 0) (hash-ref history path2 0))))])
+  (for ([entry entries])
     (proc entry)
     (when (and
            (equal? (file-or-directory-type entry) 'directory)
            (dive? entry))
       (traverse-robust proc dive? entry))))
 
-(define (add-path-to-list path)
-  (when (file-matches-filter? path)
-    (cond
-      [(< (send entries get-number) MAX-ENTRIES)
-       (send entries append (path->entry path))
-       (when (= (send entries get-number) 1) (send entries select 0))]
-      [(= (send entries get-number) MAX-ENTRIES)
-       (send entries append SHOW-MORE)])))
-
-  
+(define already-traversed (make-hash))
+(define (traverse-and-add-to-list path)
+  (traverse-robust
+   (lambda (path)
+     (when (not (hash-has-key? history path))
+       (set! all-files (append all-files (list path)))
+       (when (file-matches-filter? path)
+         (cond
+           [(< (send entries get-number) MAX-ENTRIES)
+            (send entries append (path->entry path))
+            (when (= (send entries get-number) 1) (send entries select 0))]
+           [(= (send entries get-number) MAX-ENTRIES)
+            (send entries append SHOW-MORE)]))))
+   (lambda (path) (and
+                   (not (exclude-path? path))
+                   (not (hash-has-key? already-traversed path))
+                   (hash-set! already-traversed path #t)))
+   path))
 
 (thread (lambda ()
           (define start-time (current-seconds))
-          (traverse-robust
-           (lambda (path)
-             (when (not (hash-has-key? history path))
-               (add-path-to-list path)
-               (set! all-files (append all-files (list path)))))
-           (lambda (path) (not (exclude-path? path)))
-           (string->path "C:\\"))
+          (for-each (lambda (path) (traverse-and-add-to-list path)) sorted-history-paths)
+          (traverse-and-add-to-list (string->path "C:\\"))
           (writeln (- (current-seconds) start-time))))
