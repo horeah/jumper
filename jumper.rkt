@@ -176,6 +176,6 @@
 
 (thread (lambda ()
           (define start-time (current-seconds))
-          (for-each (lambda (path) (traverse-and-add-to-list path)) sorted-history-paths)
-          (traverse-and-add-to-list (string->path "C:\\"))
+          (for-each traverse-and-add-to-list sorted-history-paths)
+          (for-each traverse-and-add-to-list (filesystem-root-list))
           (writeln (- (current-seconds) start-time))))
