@@ -131,7 +131,9 @@
      (equal? (string-ref (path->string name) 0) #\.))))
 
 (define history
-  (with-handlers ([exn? (lambda (e) (writeln "Warning: Could not load history file!") (make-hash))])
+  (with-handlers
+      ([exn? (lambda (e) (writeln "Warning: Could not load history file!")
+               (make-hash (list (cons (find-system-path 'home-dir) 1))))])
     (deserialize (read (open-input-file HISTORY-FILE)))))
 
 (define sorted-history-paths
@@ -140,6 +142,7 @@
 
 (define all-files sorted-history-paths)
 (send entries set (map path->entry all-files))
+(send entries select 0)
 
 (define (traverse-robust proc dive? start)
   (define entries (with-handlers ([exn? (lambda (exn) '())])
