@@ -36,13 +36,15 @@
 
 (define (update-list)
   (define num-entries 0)
+  (define start-time (current-milliseconds))
   (define filtered-files
     (for/list ([path all-files]
                #:when (file-matches-filter? path)
                #:break (= num-entries MAX-ENTRIES))
       (set! num-entries (add1 num-entries))
       path))
-  (define filtered-entries (map path->entry filtered-files))
+  (writeln (list "Filtered in" (- (current-milliseconds) start-time)))
+  (define filtered-entries (map path->entry (reverse filtered-files)))
   (when (= num-entries MAX-ENTRIES)
     (set! filtered-entries (append filtered-entries (list SHOW-MORE))))
   (send entries set filtered-entries)
@@ -138,10 +140,10 @@
 
 (define sorted-history-paths
   (sort (hash-keys history)
-        (lambda (path1 path2) (> (hash-ref history path1) (hash-ref history path2)))))
+        (lambda (path1 path2) (< (hash-ref history path1) (hash-ref history path2)))))
 
 (define all-files sorted-history-paths)
-(send entries set (map path->entry all-files))
+(send entries set (map path->entry (reverse sorted-history-paths)))
 (send entries select 0)
 
 (define (traverse-robust proc dive? start)
@@ -160,7 +162,7 @@
   (traverse-robust
    (lambda (path)
      (when (not (hash-has-key? history path))
-       (set! all-files (append all-files (list path)))
+       (set! all-files (cons path all-files))
        (when (file-matches-filter? path)
          (cond
            [(< (send entries get-number) MAX-ENTRIES)
@@ -178,4 +180,4 @@
           (define start-time (current-seconds))
           (for-each traverse-and-add-to-list sorted-history-paths)
           (for-each traverse-and-add-to-list (filesystem-root-list))
-          (writeln (- (current-seconds) start-time))))
+          (writeln (list "Scanned" (length all-files) "entries in" (- (current-seconds) start-time)))))
