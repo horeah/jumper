@@ -32,19 +32,21 @@
   (substring path-string 0 (min 199 (string-length path-string))))
 
 (define (file-matches-filter? path)
-  (regexp-match filter-pattern (string-downcase (path->string path))))
+  (andmap (lambda (word)
+            (string-contains? (string-downcase (path->string path)) word))
+          filter-words))
 
 (define (update-list)
   (define num-entries 0)
   (define start-time (current-milliseconds))
   (define filtered-files
-    (for/list ([path all-files]
+    (for/list ([path (reverse all-files)]
                #:when (file-matches-filter? path)
                #:break (= num-entries MAX-ENTRIES))
       (set! num-entries (add1 num-entries))
       path))
   (writeln (list "Filtered in" (- (current-milliseconds) start-time)))
-  (define filtered-entries (map path->entry (reverse filtered-files)))
+  (define filtered-entries (map path->entry filtered-files))
   (when (= num-entries MAX-ENTRIES)
     (set! filtered-entries (append filtered-entries (list SHOW-MORE))))
   (send entries set filtered-entries)
@@ -63,7 +65,7 @@
                                (hash-remove! history path)
                                (hash-set! history path new-weight)))))
 
-(define filter-pattern (regexp ""))
+(define filter-words (list))
 
 (define filter-text
   (new text-field%
@@ -91,12 +93,7 @@
                               (exit))))]
                      ['text-field
                       (begin
-                        (set!
-                         filter-pattern
-                         (regexp (string-join
-                                  (map (lambda (s) (string-append "(" s ")"))
-                                       (string-split (string-downcase (send filter-text get-value))))
-                                  ".*")))
+                        (set! filter-words (string-split (string-downcase (send filter-text get-value))))
                         (update-list))]))]
        [parent frame]))
 
@@ -178,6 +175,6 @@
 
 (thread (lambda ()
           (define start-time (current-seconds))
-          (for-each traverse-and-add-to-list sorted-history-paths)
+          (for-each traverse-and-add-to-list (reverse sorted-history-paths))
           (for-each traverse-and-add-to-list (filesystem-root-list))
           (writeln (list "Scanned" (length all-files) "entries in" (- (current-seconds) start-time)))))
