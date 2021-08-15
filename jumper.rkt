@@ -36,7 +36,11 @@
             (string-contains? (string-downcase (path->string path)) word))
           filter-words))
 
+(define update-thread null)
 (define (update-list)
+  (when (not (null? update-thread))
+    (kill-thread update-thread)
+    (set! update-thread (current-thread)))
   (define num-entries 0)
   (define start-time (current-milliseconds))
   (define filtered-files
@@ -94,7 +98,7 @@
                      ['text-field
                       (begin
                         (set! filter-words (string-split (string-downcase (send filter-text get-value))))
-                        (update-list))]))]
+                        (thread update-list))]))]
        [parent frame]))
 
 (define entries (new list-box%
