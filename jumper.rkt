@@ -39,8 +39,9 @@
 (define update-thread null)
 (define (update-list)
   (when (not (null? update-thread))
-    (kill-thread update-thread)
-    (set! update-thread (current-thread)))
+    (writeln (list "Killing" (current-thread)))
+    (kill-thread update-thread))
+  (set! update-thread (current-thread))
   (define num-entries 0)
   (define start-time (current-milliseconds))
   (define filtered-files
