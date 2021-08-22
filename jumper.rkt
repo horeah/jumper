@@ -94,7 +94,7 @@
                                   (open-output-file HISTORY-FILE #:exists 'replace))
                                 (write (serialize history) history-file)
                                 (close-output-port history-file))
-                              (system (string-join (list "explorer" selection)))
+                              (system (string-append "explorer" " \"" selection "\""))
                               (exit))))]
                      ['text-field
                       (begin
