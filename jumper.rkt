@@ -10,6 +10,7 @@
     (super-new
      [label "Jumper"] [min-width 500] [min-height 400])
     (define/override (on-subwindow-char receiver event)
+      (when (equal? (send event get-key-code) 'escape) (exit))
       (define selection (send entries get-selection))
       (define (select-bounded selection)
         (send entries select (min (max 0 selection) (- (send entries get-number) 1))))
@@ -20,7 +21,10 @@
             ['next (select-bounded (+ selection (send entries number-of-visible-items)))]
             ['prior (select-bounded (- selection (send entries number-of-visible-items)))]
             [else #f])
-          #f))))
+          #f))
+    (define/override (on-subwindow-event receiver event)
+      (send filter-text focus)
+      #f)))
 
 (define frame (new app-frame%))
 
@@ -78,24 +82,7 @@
        [callback (lambda (text event)
                    (case (send event get-event-type)
                      ['text-field-enter
-                      (begin
-                        (define selection (send entries get-string (send entries get-selection)))
-                        (if (equal? selection SHOW-MORE)
-                            (begin
-                              (set! MAX-ENTRIES (* 2 MAX-ENTRIES))
-                              (update-list))
-                            (begin
-                              (history-bump (string->path selection) 10)
-                              (history-decay)
-                              (with-handlers ([exn? (lambda (e) (display e))])
-                                (let-values ([(base name must-be-dir) (split-path HISTORY-FILE)])
-                                  (unless (directory-exists? base) (make-directory base)))
-                                (define history-file
-                                  (open-output-file HISTORY-FILE #:exists 'replace))
-                                (write (serialize history) history-file)
-                                (close-output-port history-file))
-                              (system (string-append "explorer" " \"" selection "\""))
-                              (exit))))]
+                      (open-selected-entry)]
                      ['text-field
                       (begin
                         (set! filter-words (string-split (string-downcase (send filter-text get-value))))
@@ -106,8 +93,30 @@
                      [label #f]
                      [choices (list "")]  ; empty list not accepted; we clear later
                      [selection 0]
-                     [parent frame]))
+                     [parent frame]
+                     [callback (lambda (box event)
+                                 (when (equal? (send event get-event-type) 'list-box-dclick)
+                                   (open-selected-entry)))]))
 (send entries clear)
+
+(define (open-selected-entry)
+  (define selection (send entries get-string (send entries get-selection)))
+  (if (equal? selection SHOW-MORE)
+      (begin
+        (set! MAX-ENTRIES (* 2 MAX-ENTRIES))
+        (update-list))
+      (begin
+        (history-bump (string->path selection) 10)
+        (history-decay)
+        (with-handlers ([exn? (lambda (e) (display e))])
+          (let-values ([(base name must-be-dir) (split-path HISTORY-FILE)])
+            (unless (directory-exists? base) (make-directory base)))
+          (define history-file
+            (open-output-file HISTORY-FILE #:exists 'replace))
+          (write (serialize history) history-file)
+          (close-output-port history-file))
+        (system (string-append "explorer" " \"" selection "\""))
+        (exit))))
 
 (send frame show #t)
 (send filter-text focus)
