@@ -27,6 +27,7 @@
       #f)))
 
 (define frame (new app-frame%))
+(send frame create-status-line)
 
 (define MAX-ENTRIES 100)
 (define SHOW-MORE "<show more entries>")
@@ -186,8 +187,10 @@
                    (hash-set! already-traversed path #t)))
    path))
 
+(send frame set-status-text "Scanning...")
 (thread (lambda ()
           (define start-time (current-seconds))
           (for-each traverse-and-add-to-list (reverse sorted-history-paths))
           (for-each traverse-and-add-to-list (filesystem-root-list))
+          (send frame set-status-text (format "Scanned ~a files and folders" (length all-files)))
           (writeln (list "Scanned" (length all-files) "entries in" (- (current-seconds) start-time)))))
