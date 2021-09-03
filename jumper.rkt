@@ -14,7 +14,7 @@
       (define selection (send entries get-selection))
       (define (select-bounded selection)
         (send entries select (min (max 0 selection) (- (send entries get-number) 1))))
-      (if (and selection (not (send event get-shift-down)))
+      (if (and (send entries is-enabled?) selection (not (send event get-shift-down)))
           (case (send event get-key-code)
             ['down (select-bounded (+ selection 1))]
             ['up (select-bounded (- selection 1))]
@@ -41,26 +41,28 @@
             (string-contains? (string-downcase (path->string path)) word))
           filter-words))
 
-(define update-thread null)
+(define update-thread (thread (lambda () null)))
 (define (update-list)
-  (when (not (null? update-thread))
-    (writeln (list "Killing" (current-thread)))
-    (kill-thread update-thread))
+  (kill-thread update-thread)
   (set! update-thread (current-thread))
+  (thread-suspend scan-thread)
+  (send entries enable #f)
+  (send frame set-status-text "Searching...")
   (define num-entries 0)
-  (define start-time (current-milliseconds))
   (define filtered-files
     (for/list ([path (reverse all-files)]
                #:when (file-matches-filter? path)
                #:break (= num-entries MAX-ENTRIES))
       (set! num-entries (add1 num-entries))
       path))
-  (writeln (list "Filtered in" (- (current-milliseconds) start-time)))
   (define filtered-entries (map path->entry filtered-files))
   (when (= num-entries MAX-ENTRIES)
     (set! filtered-entries (append filtered-entries (list SHOW-MORE))))
   (send entries set filtered-entries)
-  (when (> num-entries 0) (send entries select 0)))
+  (when (> num-entries 0) (send entries select 0))
+  (send entries enable #t)
+  (when (thread-dead? scan-thread) (send frame set-status-text ""))
+  (thread-resume scan-thread))
 
 (define (history-bump path amount)
   (define normalized-path (normalize-path path))
@@ -187,10 +189,13 @@
                    (hash-set! already-traversed path #t)))
    path))
 
-(send frame set-status-text "Scanning...")
-(thread (lambda ()
-          (define start-time (current-seconds))
-          (for-each traverse-and-add-to-list (reverse sorted-history-paths))
-          (for-each traverse-and-add-to-list (filesystem-root-list))
-          (send frame set-status-text (format "Scanned ~a files and folders" (length all-files)))
-          (writeln (list "Scanned" (length all-files) "entries in" (- (current-seconds) start-time)))))
+(send frame set-status-text "Searching...")
+(define scan-thread
+  (thread (lambda ()
+            (define start-time (current-seconds))
+            (for-each traverse-and-add-to-list (reverse sorted-history-paths))
+            (for-each traverse-and-add-to-list (filesystem-root-list))
+            (send frame set-status-text
+                  (format "Scanned ~a entries in ~as"
+                          (length all-files)
+                          (- (current-seconds) start-time))))))
