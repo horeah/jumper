@@ -1,9 +1,8 @@
 #lang racket/gui
-(require racket/serialize)
+(require "scanner.rkt")
+(require "history.rkt")
 
 (define (debug text) (writeln text) (flush-output))
-
-(define HISTORY-FILE (build-path (getenv "APPDATA") "Jumper" "history"))
 
 (define app-frame%
   (class frame%
@@ -64,21 +63,8 @@
   (when (thread-dead? scan-thread) (send frame set-status-text ""))
   (thread-resume scan-thread))
 
-(define (history-bump path amount)
-  (define normalized-path (normalize-path path))
-  (hash-set! history normalized-path (+ amount (hash-ref! history normalized-path 0)))
-  (let-values ([(base name must-be-dir) (split-path path)])
-    (when (and (> amount 0) base) (history-bump base (floor (/ amount 2))))))
-
-(define (history-decay)
-  (hash-for-each history (lambda (path weight)
-                           (define new-weight (sub1 weight))
-                           (if (<= new-weight 0)
-                               (hash-remove! history path)
-                               (hash-set! history path new-weight)))))
 
 (define filter-words (list))
-
 (define filter-text
   (new text-field%
        [label "Jump To"]
@@ -111,68 +97,20 @@
       (begin
         (history-bump (string->path selection) 10)
         (history-decay)
-        (with-handlers ([exn? (lambda (e) (display e))])
-          (let-values ([(base name must-be-dir) (split-path HISTORY-FILE)])
-            (unless (directory-exists? base) (make-directory base)))
-          (define history-file
-            (open-output-file HISTORY-FILE #:exists 'replace))
-          (write (serialize history) history-file)
-          (close-output-port history-file))
+        (history-save)
         (system (string-append "explorer" " \"" selection "\""))
         (exit))))
 
 (send frame show #t)
 (send filter-text focus)
 
-(define EXCLUDED-PATHS
-  (map (lambda (string)
-         (normal-case-path (simplify-path (path->complete-path (string->path string)))))
-       (list
-        (getenv "ProgramFiles")
-        (getenv "ProgramFiles(X86)")
-        (getenv "ProgramData")
-        (getenv "APPDATA")
-        (getenv "LOCALAPPDATA")
-        (string-append (getenv "APPDATA") "\\..\\" "LocalLow")
-        (getenv "TEMP")
-        (getenv "SystemRoot")
-        "C:\\Users\\Default"
-        "C:\\$RECYCLE.BIN"
-        "C:\\$WinREAgent")))
-
-(define (exclude-path? path)
-  (or
-   (member (normal-case-path (path->complete-path path)) EXCLUDED-PATHS)
-   (let-values ([(base name must-be-dir) (split-path path)])
-     (equal? (string-ref (path->string name) 0) #\.))))
-
-(define history
-  (with-handlers
-      ([exn? (lambda (e) (writeln "Warning: Could not load history file!")
-               (make-hash (list (cons (find-system-path 'home-dir) 1))))])
-    (deserialize (read (open-input-file HISTORY-FILE)))))
-
-(define sorted-history-paths
-  (sort (hash-keys history)
-        (lambda (path1 path2) (< (hash-ref history path1) (hash-ref history path2)))))
-
+(history-load)
 (define all-files sorted-history-paths)
 (send entries set (map path->entry (reverse sorted-history-paths)))
 (send entries select 0)
 
-(define (traverse-robust proc traverse? start)
-  (when (traverse? start)
-    (define entries (with-handlers ([exn? (lambda (exn) '())])
-                      (map (lambda (entry) (build-path start entry))
-                           (directory-list start))))
-    (for ([entry entries])
-      (proc entry)
-      (when (equal? (file-or-directory-type entry) 'directory)
-        (traverse-robust proc traverse? entry)))))
-
-(define already-traversed (make-hash))
-(define (traverse-and-add-to-list path)
-  (traverse-robust
+(define (traverse-and-add-to-list start)
+  (traverse
    (lambda (path)
      (when (not (hash-has-key? history path))
        (set! all-files (cons path all-files))
@@ -183,11 +121,7 @@
             (when (= (send entries get-number) 1) (send entries select 0))]
            [(= (send entries get-number) MAX-ENTRIES)
             (send entries append SHOW-MORE)]))))
-   (lambda (path) (and
-                   (not (exclude-path? path))
-                   (not (hash-has-key? already-traversed path))
-                   (hash-set! already-traversed path #t)))
-   path))
+   start))
 
 (send frame set-status-text "Searching...")
 (define scan-thread
