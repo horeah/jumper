@@ -1,4 +1,8 @@
-#lang racket/gui
+#lang racket/base
+(require racket/class)
+(require racket/gui/base)
+(require racket/string)
+(require racket/system)
 (require "scanner.rkt")
 (require "history.rkt")
 
@@ -24,6 +28,7 @@
       #f)))
 
 (define frame (new app-frame%))
+(send frame show #t)
 (send frame create-status-line)
 
 (define MAX-ENTRIES 100)
@@ -102,7 +107,6 @@
         (process (string-append "explorer" " \"" selection "\""))
         (exit))))
 
-(send frame show #t)
 (send filter-text focus)
 
 (with-handlers
