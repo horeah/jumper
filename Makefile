@@ -4,7 +4,7 @@ RM = rm -f
 CP = cp
 
 build: *.rkt
-	raco exe jumper.rkt
+	raco exe --gui jumper.rkt
 
 .PHONY: dist
 dist: build

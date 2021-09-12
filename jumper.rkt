@@ -2,8 +2,6 @@
 (require "scanner.rkt")
 (require "history.rkt")
 
-(define (debug text) (writeln text) (flush-output))
-
 (define app-frame%
   (class frame%
     (super-new
@@ -97,14 +95,22 @@
       (begin
         (history-bump (string->path selection) 10)
         (history-decay)
-        (history-save)
-        (system (string-append "explorer" " \"" selection "\""))
+        (with-handlers ([exn? (lambda (e) (message-box
+                                           "Error" (format "Could not save history: ~a" (exn-message e))
+                                           #f (list 'ok 'stop)))])
+          (history-save))
+        (process (string-append "explorer" " \"" selection "\""))
         (exit))))
 
 (send frame show #t)
 (send filter-text focus)
 
-(history-load)
+(with-handlers
+  ([exn? (lambda (e)
+           (message-box "Error" (format "Could not load history: ~a" (exn-message e))
+                        #f (list 'ok 'stop))
+           (exit 1))])
+  (history-load))
 (define all-files sorted-history-paths)
 (send entries set (map path->entry (reverse sorted-history-paths)))
 (send entries select 0)

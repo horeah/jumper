@@ -9,23 +9,21 @@
 
 (define (history-load)
   (set! history
-        (with-handlers
-          ([exn? (lambda (e) (writeln "Warning: Could not load history file!")
-                   (make-hash (list (cons (find-system-path 'home-dir) 1))))])
-          (deserialize (read (open-input-file HISTORY-FILE)))))
+        (if (file-exists? HISTORY-FILE)
+            (deserialize (read (open-input-file HISTORY-FILE)))
+            (make-hash (list (cons (find-system-path 'home-dir) 1)))))
   (set! sorted-history-paths
         (sort (hash-keys history)
               (lambda (path1 path2) (< (hash-ref history path1) (hash-ref history path2))))))
 
 
 (define (history-save)
-  (with-handlers ([exn? (lambda (e) (display e))])
     (let-values ([(base name must-be-dir) (split-path HISTORY-FILE)])
       (unless (directory-exists? base) (make-directory base)))
     (define history-file
       (open-output-file HISTORY-FILE #:exists 'replace))
     (write (serialize history) history-file)
-    (close-output-port history-file)))
+    (close-output-port history-file))
 
 
 (define (history-bump path amount)
