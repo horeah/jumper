@@ -6,10 +6,15 @@
 (require "scanner.rkt")
 (require "history.rkt")
 
+(define-values (screen-width screen-height) (get-display-size))
+(define frame-width (/ screen-width 2))
+(define frame-height (/ screen-height 2))
 (define app-frame%
   (class frame%
     (super-new
-     [label "Jumper"] [min-width 500] [min-height 400])
+     [label "Jumper"]
+     [min-width frame-width] [min-height frame-height]
+     [x (/ (- screen-width frame-width) 2)] [y (/ (- screen-height frame-height) 2)])
     (define/override (on-subwindow-char receiver event)
       (when (equal? (send event get-key-code) 'escape) (exit))
       (define selection (send entries get-selection))
