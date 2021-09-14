@@ -120,8 +120,9 @@
                         #f (list 'ok 'stop))
            (exit 1))])
   (history-load))
-(define all-files sorted-history-paths)
-(send entries set (map path->entry (reverse sorted-history-paths)))
+(define all-files (filter (lambda (p) (or (file-exists? p) (directory-exists? p)))
+                            sorted-history-paths))
+(send entries set (map path->entry (reverse all-files)))
 (send entries select 0)
 
 (define (traverse-and-add-to-list start)
