@@ -15,8 +15,14 @@
      [label "Jumper"]
      [min-width frame-width] [min-height frame-height]
      [x (/ (- screen-width frame-width) 2)] [y (/ (- screen-height frame-height) 2)])
+
     (define/override (on-subwindow-char receiver event)
-      (when (equal? (send event get-key-code) 'escape) (exit))
+      (when (equal? (send event get-key-code) 'escape)
+        (if (non-empty-string? (send filter-text get-value))
+            (begin
+              (send filter-text set-value "")
+              (trigger-update-list))
+            (exit)))
       (define selection (send entries get-selection))
       (define (select-bounded selection)
         (send entries select (min (max 0 selection) (- (send entries get-number) 1))))
@@ -28,6 +34,7 @@
             ['prior (select-bounded (- selection (send entries number-of-visible-items)))]
             [else #f])
           #f))
+
     (define/override (on-subwindow-event receiver event)
       (send filter-text focus)
       #f)))
@@ -73,17 +80,18 @@
 
 
 (define filter-words (list))
+
+(define (trigger-update-list)
+  (set! filter-words (string-split (string-downcase (send filter-text get-value))))
+  (thread update-list))
+
 (define filter-text
   (new text-field%
        [label "Jump To"]
        [callback (lambda (text event)
                    (case (send event get-event-type)
-                     ['text-field-enter
-                      (open-selected-entry)]
-                     ['text-field
-                      (begin
-                        (set! filter-words (string-split (string-downcase (send filter-text get-value))))
-                        (thread update-list))]))]
+                     ['text-field-enter (open-selected-entry)]
+                     ['text-field (trigger-update-list)]))]
        [parent frame]))
 
 (define entries (new list-box%
