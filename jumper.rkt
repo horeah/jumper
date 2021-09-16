@@ -6,6 +6,9 @@
 (require "scanner.rkt")
 (require "history.rkt")
 
+(define shift-down? #f)
+(define control-down? #f)
+
 (define-values (screen-width screen-height) (get-display-size))
 (define frame-width (/ screen-width 2))
 (define frame-height (/ screen-height 2))
@@ -16,6 +19,10 @@
      [min-width frame-width] [min-height frame-height]
      [x (/ (- screen-width frame-width) 2)] [y (/ (- screen-height frame-height) 2)])
 
+    (define (update-modifier-state event)
+        (set! shift-down? (send event get-shift-down))
+        (set! control-down? (send event get-control-down)))
+
     (define/override (on-subwindow-char receiver event)
       (when (equal? (send event get-key-code) 'escape)
         (if (non-empty-string? (send filter-text get-value))
@@ -23,6 +30,9 @@
               (send filter-text set-value "")
               (trigger-update-list))
             (exit)))
+      (when (equal? (send event get-key-code) #\return)
+        (update-modifier-state event))
+
       (define selection (send entries get-selection))
       (define (select-bounded selection)
         (send entries select (min (max 0 selection) (- (send entries get-number) 1))))
@@ -36,6 +46,7 @@
           #f))
 
     (define/override (on-subwindow-event receiver event)
+      (update-modifier-state event)
       (send filter-text focus)
       #f)))
 
@@ -117,8 +128,10 @@
                                            "Error" (format "Could not save history: ~a" (exn-message e))
                                            #f (list 'ok 'stop)))])
           (history-save))
-        (process (string-append "explorer" " \"" selection "\""))
-        (exit))))
+        (process (string-append
+                  (if control-down? "explorer /select," "explorer")
+                  " \"" selection "\""))
+        (when (not shift-down?) (exit)))))
 
 (send filter-text focus)
 
