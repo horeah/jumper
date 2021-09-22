@@ -2,6 +2,7 @@
 (require racket/class)
 (require racket/gui/base)
 (require racket/string)
+(require racket/math)
 (require racket/system)
 (require "scanner.rkt")
 (require "history.rkt")
@@ -59,7 +60,14 @@
 
 (define (path->entry path)
   (define path-string (path->string path))
-  (substring path-string 0 (min 199 (string-length path-string))))
+  (define path-string-len (string-length path-string))
+  (define half-len (- (exact-floor (/ MAX-ENTRY-LEN 2)) 2))
+  (if (< path-string-len MAX-ENTRY-LEN)
+      path-string
+      (string-append
+       (substring path-string 0 half-len)
+       "···"
+       (substring path-string (- path-string-len half-len) path-string-len))))
 
 (define (file-matches-filter? path)
   (andmap (lambda (word)
@@ -80,10 +88,8 @@
                #:break (= num-entries MAX-ENTRIES))
       (set! num-entries (add1 num-entries))
       path))
-  (define filtered-entries (map path->entry filtered-files))
-  (when (= num-entries MAX-ENTRIES)
-    (set! filtered-entries (append filtered-entries (list SHOW-MORE))))
-  (send entries set filtered-entries)
+  (entries-set-files filtered-files)
+  (when (= num-entries MAX-ENTRIES) (send entries append SHOW-MORE))
   (when (> num-entries 0) (send entries select 0))
   (send entries enable #t)
   (when (thread-dead? scan-thread) (send frame set-status-text ""))
@@ -115,14 +121,23 @@
                                    (open-selected-entry)))]))
 (send entries clear)
 
+(define (entries-set-files files)
+  (send entries set (map path->entry files))
+  (for ([(path index) (in-indexed files)])
+    (send entries set-data index path)))
+
+(define-values (char-width _) (get-window-text-extent "X" view-control-font))
+(define MAX-ENTRY-LEN (/ (send entries get-width) char-width))
+
 (define (open-selected-entry)
-  (define selection (send entries get-string (send entries get-selection)))
-  (if (equal? selection SHOW-MORE)
+  (define selection-string (send entries get-string (send entries get-selection)))
+  (define selection-path (send entries get-data (send entries get-selection)))
+  (if (equal? selection-string SHOW-MORE)
       (begin
         (set! MAX-ENTRIES (* 2 MAX-ENTRIES))
         (update-list))
       (begin
-        (history-bump (string->path selection) 10)
+        (history-bump selection-path 10)
         (history-decay)
         (with-handlers ([exn? (lambda (e) (message-box
                                            "Error" (format "Could not save history: ~a" (exn-message e))
@@ -130,7 +145,7 @@
           (history-save))
         (process (string-append
                   (if control-down? "explorer /select," "explorer")
-                  " \"" selection "\""))
+                  " \"" (path->string selection-path) "\""))
         (when (not shift-down?) (exit)))))
 
 (send filter-text focus)
@@ -143,7 +158,7 @@
   (history-load))
 (define all-files (filter (lambda (p) (or (file-exists? p) (directory-exists? p)))
                             sorted-history-paths))
-(send entries set (map path->entry (reverse all-files)))
+(entries-set-files (reverse all-files))
 (send entries select 0)
 
 (define (traverse-and-add-to-list start)
@@ -154,7 +169,7 @@
        (when (file-matches-filter? path)
          (cond
            [(< (send entries get-number) MAX-ENTRIES)
-            (send entries append (path->entry path))
+            (send entries append (path->entry path) path)
             (when (= (send entries get-number) 1) (send entries select 0))]
            [(= (send entries get-number) MAX-ENTRIES)
             (send entries append SHOW-MORE)]))))
