@@ -69,10 +69,20 @@
        "···"
        (substring path-string (- path-string-len half-len) path-string-len))))
 
-(define (file-matches-filter? path)
-  (andmap (lambda (word)
-            (string-contains? (string-downcase (path->string path)) word))
-          filter-words))
+(define (string-asciize str)
+  (list->string
+   (for/list ([b (in-bytes (string->bytes/utf-8 (string-normalize-nfd str)))]
+              #:when (< b 128))
+     (integer->char b))))
+
+(define (string-normalize str)
+  (string-asciize (string-downcase str)))
+
+(define (item-matches-filter? item)
+  (andmap (lambda (word) (string-contains? (path-item-string item)  word)) filter-words))
+
+(struct path-item (path string))
+(define (make-path-item path) (path-item path (string-normalize (path->string path))))
 
 (define update-thread (thread (lambda () null)))
 (define (update-list)
@@ -83,11 +93,11 @@
   (send frame set-status-text "Searching...")
   (define num-entries 0)
   (define filtered-files
-    (for/list ([path (reverse all-files)]
-               #:when (file-matches-filter? path)
+    (for/list ([path-item (reverse all-files)]
+               #:when (item-matches-filter? path-item)
                #:break (= num-entries MAX-ENTRIES))
       (set! num-entries (add1 num-entries))
-      path))
+      (path-item-path path-item)))
   (entries-set-files filtered-files)
   (when (= num-entries MAX-ENTRIES) (send entries append SHOW-MORE))
   (when (> num-entries 0) (send entries select 0))
@@ -99,7 +109,7 @@
 (define filter-words (list))
 
 (define (trigger-update-list)
-  (set! filter-words (string-split (string-downcase (send filter-text get-value))))
+  (set! filter-words (string-split (string-normalize (send filter-text get-value))))
   (thread update-list))
 
 (define filter-text
@@ -156,17 +166,20 @@
                         #f (list 'ok 'stop))
            (exit 1))])
   (history-load))
-(define all-files (filter (lambda (p) (or (file-exists? p) (directory-exists? p)))
-                            sorted-history-paths))
-(entries-set-files (reverse all-files))
+(define all-files
+  (for/list ([path sorted-history-paths]
+             #:when (or (file-exists? path) (directory-exists? path)))
+    (make-path-item path)))
+(entries-set-files (map path-item-path (reverse all-files)))
 (send entries select 0)
 
 (define (traverse-and-add-to-list start)
   (traverse
    (lambda (path)
      (when (not (hash-has-key? history path))
-       (set! all-files (cons path all-files))
-       (when (file-matches-filter? path)
+       (define item (make-path-item path))
+       (set! all-files (cons item all-files))
+       (when (item-matches-filter? item)
          (cond
            [(< (send entries get-number) MAX-ENTRIES)
             (send entries append (path->entry path) path)
