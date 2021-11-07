@@ -98,7 +98,9 @@
                #:break (= num-entries MAX-ENTRIES))
       (set! num-entries (add1 num-entries))
       (path-item-path path-item)))
-  (entries-set-files filtered-files)
+  (send entries set (map path->entry filtered-files))
+  (for ([(path index) (in-indexed filtered-files)])
+    (send entries set-data index path))
   (when (= num-entries MAX-ENTRIES) (send entries append SHOW-MORE))
   (when (> num-entries 0) (send entries select 0))
   (send entries enable #t)
@@ -120,6 +122,7 @@
                      ['text-field-enter (open-selected-entry)]
                      ['text-field (trigger-update-list)]))]
        [parent frame]))
+(send filter-text focus)
 
 (define entries (new list-box%
                      [label #f]
@@ -130,11 +133,6 @@
                                  (when (equal? (send event get-event-type) 'list-box-dclick)
                                    (open-selected-entry)))]))
 (send entries clear)
-
-(define (entries-set-files files)
-  (send entries set (map path->entry files))
-  (for ([(path index) (in-indexed files)])
-    (send entries set-data index path)))
 
 (define-values (char-width _) (get-window-text-extent "X" view-control-font))
 (define MAX-ENTRY-LEN (/ (send entries get-width) char-width))
@@ -158,39 +156,45 @@
                   " \"" (path->string selection-path) "\""))
         (when (not shift-down?) (exit)))))
 
-(send filter-text focus)
+(define all-files (list))
+(define already-listed (make-hash))
 
-(with-handlers
-  ([exn? (lambda (e)
-           (message-box "Error" (format "Could not load history: ~a" (exn-message e))
-                        #f (list 'ok 'stop))
-           (exit 1))])
-  (history-load))
-(define all-files
-  (for/list ([path sorted-history-paths]
-             #:when (or (file-exists? path) (directory-exists? path)))
-    (make-path-item path)))
-(entries-set-files (map path-item-path (reverse all-files)))
-(send entries select 0)
+(define (add-to-list path)
+  (when (not (hash-has-key? already-listed path))
+    (hash-set! already-listed path #t)
+    (define item (make-path-item path))
+    (set! all-files (cons item all-files))
+    (when (item-matches-filter? item)
+      (cond
+        [(< (send entries get-number) MAX-ENTRIES)
+         (send entries append (path->entry path) path)
+         (when (= (send entries get-number) 1) (send entries select 0))]
+        [(= (send entries get-number) MAX-ENTRIES)
+         (send entries append SHOW-MORE)]))))
 
 (define (traverse-and-add-to-list start)
-  (traverse
-   (lambda (path)
-     (when (not (hash-has-key? history path))
-       (define item (make-path-item path))
-       (set! all-files (cons item all-files))
-       (when (item-matches-filter? item)
-         (cond
-           [(< (send entries get-number) MAX-ENTRIES)
-            (send entries append (path->entry path) path)
-            (when (= (send entries get-number) 1) (send entries select 0))]
-           [(= (send entries get-number) MAX-ENTRIES)
-            (send entries append SHOW-MORE)]))))
-   start))
+  (traverse add-to-list start))
 
-(send frame set-status-text "Searching...")
 (define scan-thread
   (thread (lambda ()
+            (send frame set-status-text "Loading history...")
+            (with-handlers
+              ([exn? (lambda (e)
+                       (message-box "Error" (format "Could not load history: ~a" (exn-message e))
+                                    #f (list 'ok 'stop))
+                       (exit 1))])
+              (history-load))
+            (for ([path (reverse sorted-history-paths)]
+                  #:when (or (file-exists? path) (directory-exists? path)))
+              (add-to-list path))
+            (send entries select 0)
+
+            (send frame set-status-text "Loading Windows' recent files...")
+            (for ([path (windows-recents)]
+                  #:when (or (file-exists? path) (directory-exists? path)))
+              (add-to-list path))
+
+            (send frame set-status-text "Searching...")
             (define start-time (current-seconds))
             (for-each traverse-and-add-to-list (reverse sorted-history-paths))
             (for-each traverse-and-add-to-list (filesystem-root-list))
