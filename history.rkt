@@ -14,7 +14,7 @@
 (define (history-load)
   (set! history
         (if (file-exists? HISTORY-FILE)
-            (deserialize (read (open-input-file HISTORY-FILE)))
+            (deserialize (call-with-input-file HISTORY-FILE read))
             (make-hash (list (cons (find-system-path 'home-dir) 1)))))
   (set! sorted-history-paths
         (sort (hash-keys history)
