@@ -190,8 +190,10 @@
             (send entries select 0)
 
             (send frame set-status-text "Loading Windows' recent files...")
-            (for ([path (windows-recents)]
-                  #:when (or (file-exists? path) (directory-exists? path)))
+            (for ([path (load-recents)]
+                  #:when (or (file-exists? path)
+                             (directory-exists? path)
+                             (string-prefix? (path->string path) "https:")))
               (add-to-list path))
 
             (send frame set-status-text "Searching...")

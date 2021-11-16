@@ -3,9 +3,11 @@
 (require racket/serialize)
 (require racket/string)
 (require racket/stream)
+(require racket/file)
+(require racket/list)
 (require ffi/com)
 (provide history-load history-save history-bump history-decay history sorted-history-paths
-         windows-recents)
+         load-recents)
 
 (define HISTORY-FILE (build-path (getenv "APPDATA") "Jumper" "history"))
 (define history (make-hash))
@@ -44,30 +46,37 @@
                                (hash-remove! history path)
                                (hash-set! history path new-weight)))))
 
-
-(define (windows-recents)
-  (define shell (com-create-instance "WScript.Shell"))
-  (define targets 
-    (for/stream
-        ([path (directory-list
-                         (build-path (getenv "APPDATA") "Microsoft\\Windows\\Recent") #:build? #t)]
-         #:when (path-has-extension? path #".lnk"))
-      (define file-name (path->string (path-replace-extension (file-name-from-path path) "")))
-      (unless (or
-               (string-prefix? file-name "ms-gamingoverlay")
-               (string-prefix? file-name "ms-settings")
-               (string-prefix? file-name "ms-screensketchedit")
-               (string-prefix? file-name "ms-powerpoint")
-               (string-prefix? file-name "microsoft-edgehttp")
-               (string-prefix? file-name "https--")
-               (string-prefix? file-name "windowsdefender--")
-               (string-suffix? file-name "automaticDestinations-ms"))
-        (define shortcut (com-invoke shell "CreateShortcut" (path->string path)))
-        (com-get-property shortcut "TargetPath"))))
+(define (load-recents)
+  (stream-append 
+   (load-recents-dir (build-path (getenv "APPDATA") "Microsoft\\Windows\\Recent"))
+   (load-recents-dir (build-path (getenv "APPDATA") "Microsoft\\Office\\Recent"))))
   
+(define (load-recents-dir dir)
+  (define shell (com-create-instance "WScript.Shell"))
+  (define targets
+    (for/stream ([path (directory-list dir #:build? #t)])
+      (case (path-get-extension path)
+        [(list #".lnk")
+         (define file-name (path->string (path-replace-extension (file-name-from-path path) "")))
+         (unless (or
+                  (string-prefix? file-name "ms-gamingoverlay")
+                  (string-prefix? file-name "ms-settings")
+                  (string-prefix? file-name "ms-screensketchedit")
+                  (string-prefix? file-name "ms-powerpoint")
+                  (string-prefix? file-name "microsoft-edgehttp")
+                  (string-prefix? file-name "https--")
+                  (string-prefix? file-name "windowsdefender--")
+                  (string-suffix? file-name "automaticDestinations-ms"))
+           (define shortcut (com-invoke shell "CreateShortcut" (path->string path)))
+           (com-get-property shortcut "TargetPath"))]
+        [(list #".url")
+         (define lines (file->lines path))
+         (second (string-split (second lines) "="))])))
+
   (for/stream ([target targets]
              #:when (non-empty-string? target))
     (string->path target)))
+
 
 
 
