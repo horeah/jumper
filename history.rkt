@@ -5,7 +5,9 @@
 (require racket/stream)
 (require racket/file)
 (require racket/list)
+(require json)
 (require ffi/com)
+
 (provide history-load history-save history-bump history-decay history sorted-history-paths
          load-recents)
 
@@ -49,8 +51,10 @@
 (define (load-recents)
   (stream-append 
    (load-recents-dir (build-path (getenv "APPDATA") "Microsoft\\Windows\\Recent"))
-   (load-recents-dir (build-path (getenv "APPDATA") "Microsoft\\Office\\Recent"))))
-  
+   (load-recents-dir (build-path (getenv "APPDATA") "Microsoft\\Office\\Recent"))
+   (load-mru-cache (build-path (getenv "LOCALAPPDATA") "Microsoft\\Office\\16.0\\MruServiceCache"))))
+
+
 (define (load-recents-dir dir)
   (define shell (com-create-instance "WScript.Shell"))
   (define targets
@@ -78,6 +82,17 @@
     (string->path target)))
 
 
+(define (load-mru-cache dir)
+  (define result (stream))
+  (for ([id (directory-list dir #:build? #t)])
+    (for ([app (directory-list id #:build? #t)])
+      (for ([doclist (directory-list app #:build? #t)]
+            #:when (string-prefix? (path->string (file-name-from-path doclist)) "Documents_"))
+        (set! result
+              (stream-append result
+                             (for/stream ([doc (call-with-input-file doclist read-json)])
+                               (string->path (hash-ref doc 'DocumentUrl))))))))
+  result)
 
 
 
