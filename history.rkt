@@ -9,7 +9,7 @@
 (require ffi/com)
 
 (provide history-load history-save history-bump history-decay history sorted-history-paths
-         load-recents)
+         path-is-online? load-recents)
 
 (define HISTORY-FILE (build-path (getenv "APPDATA") "Jumper" "history"))
 (define history (make-hash))
@@ -35,10 +35,12 @@
 
 
 (define (history-bump path amount)
-  (define normalized-path (normalize-path path))
+  (define normalized-path
+    (if (path-is-online? path) path (normalize-path path)))
   (hash-set! history normalized-path (+ amount (hash-ref! history normalized-path 0)))
-  (let-values ([(base name must-be-dir) (split-path path)])
-    (when (and (> amount 0) base) (history-bump base (floor (/ amount 2))))))
+  (unless (path-is-online? path)
+    (let-values ([(base name must-be-dir) (split-path path)])
+      (when (and (> amount 0) base) (history-bump base (floor (/ amount 2)))))))
 
 
 (define (history-decay)
@@ -95,6 +97,5 @@
   result)
 
 
-
-
-
+(define (path-is-online? path)
+  (string-prefix? (path->string path) "https:"))

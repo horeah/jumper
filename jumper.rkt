@@ -4,6 +4,7 @@
 (require racket/string)
 (require racket/math)
 (require racket/system)
+(require racket/path)
 (require "scanner.rkt")
 (require "history.rkt")
 
@@ -137,6 +138,13 @@
 (define-values (char-width _) (get-window-text-extent "X" view-control-font))
 (define MAX-ENTRY-LEN (/ (send entries get-width) char-width))
 
+(define (handler-app path)
+  (case (bytes->string/utf-8 (path-get-extension path))
+    [(".xls" ".xlsx") "excel"]
+    [(".doc" ".docx") "winword"]
+    [(".ppt" ".pptx") "powerpnt"]
+    [else "explorer"]))
+
 (define (open-selected-entry)
   (define selection-string (send entries get-string (send entries get-selection)))
   (define selection-path (send entries get-data (send entries get-selection)))
@@ -151,9 +159,12 @@
                                            "Error" (format "Could not save history: ~a" (exn-message e))
                                            #f (list 'ok 'stop)))])
           (history-save))
-        (process (string-append
-                  (if control-down? "explorer /select," "explorer")
-                  " \"" (path->string selection-path) "\""))
+
+        (let ([command-prefix
+               (if (path-is-online? selection-path)
+                   (if control-down? "explorer" (string-append "start " (handler-app selection-path)))
+                   (if control-down? "explorer /select," "explorer"))])
+          (process (string-append command-prefix " \"" (path->string selection-path) "\"")))
         (when (not shift-down?) (exit)))))
 
 (define all-files (list))
@@ -185,15 +196,13 @@
                        (exit 1))])
               (history-load))
             (for ([path (reverse sorted-history-paths)]
-                  #:when (or (file-exists? path) (directory-exists? path)))
+                  #:when (or (file-exists? path) (directory-exists? path) (path-is-online? path)))
               (add-to-list path))
             (send entries select 0)
 
             (send frame set-status-text "Loading Windows' recent files...")
             (for ([path (load-recents)]
-                  #:when (or (file-exists? path)
-                             (directory-exists? path)
-                             (string-prefix? (path->string path) "https:")))
+                  #:when (or (file-exists? path) (directory-exists? path) (path-is-online? path)))
               (add-to-list path))
 
             (send frame set-status-text "Searching...")
