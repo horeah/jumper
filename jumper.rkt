@@ -139,7 +139,8 @@
 (define MAX-ENTRY-LEN (/ (send entries get-width) char-width))
 
 (define (handler-app path)
-  (case (bytes->string/utf-8 (path-get-extension path))
+  (define ext (if (path-get-extension path) (path-get-extension path) #""))
+  (case (bytes->string/utf-8 ext)
     [(".xls" ".xlsx") "excel"]
     [(".doc" ".docx") "winword"]
     [(".ppt" ".pptx") "powerpnt"]
