@@ -7,6 +7,7 @@
 (require racket/list)
 (require json)
 (require ffi/com)
+(require net/uri-codec)
 
 (provide history-load history-save history-bump history-decay history sorted-history-paths
          path-is-online? load-recents)
@@ -77,7 +78,7 @@
            (com-get-property shortcut "TargetPath"))]
         [(list #".url")
          (define lines (file->lines path))
-         (second (string-split (second lines) "="))])))
+         (uri-decode (second (string-split (second lines) "=")))])))
 
   (for/stream ([target targets]
              #:when (non-empty-string? target))
