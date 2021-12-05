@@ -191,7 +191,7 @@
 (define (parent-dirs-except-roots paths)
   (filter (lambda (p) (and p (not (member p (filesystem-root-list)))))
           (for/list ([path paths]
-                     #:when (or (directory-exists? path) (file-exists? path)))
+                     #:unless (path-is-online? path))
             (let-values ([(base name must-be-dir) (split-path path)])
               base))))
 
@@ -210,12 +210,13 @@
             (for ([path (stream-rest recents)]
                   #:when (or (file-exists? path) (directory-exists? path) (path-is-online? path)))
               (add-to-list path))
+            (define recents-list (map path-item-path all-files))
 
             (define start-time (current-seconds))
             (send frame set-status-text "Searching recents...")
-            (for-each traverse-and-add-to-list (stream->list recents))
+            (for-each traverse-and-add-to-list recents-list)
             (send frame set-status-text "Searching one level up...")
-            (define recents-one-level-up (parent-dirs-except-roots recents))
+            (define recents-one-level-up (parent-dirs-except-roots recents-list))
             (for-each traverse-and-add-to-list recents-one-level-up)
             (send frame set-status-text "Searching two levels up...")
             (define recents-two-level-up (parent-dirs-except-roots recents-one-level-up))
