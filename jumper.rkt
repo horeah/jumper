@@ -5,6 +5,7 @@
 (require racket/math)
 (require racket/system)
 (require racket/path)
+(require racket/stream)
 (require "scanner.rkt")
 (require "history.rkt")
 
@@ -187,28 +188,39 @@
 (define (traverse-and-add-to-list start)
   (traverse add-to-list start))
 
+(define (parent-dirs-except-roots paths)
+  (filter (lambda (p) (and p (not (member p (filesystem-root-list)))))
+          (for/list ([path paths]
+                     #:when (or (directory-exists? path) (file-exists? path)))
+            (let-values ([(base name must-be-dir) (split-path path)])
+              base))))
+
 (define scan-thread
   (thread (lambda ()
-            (send frame set-status-text "Loading history...")
-            (with-handlers
-              ([exn? (lambda (e)
-                       (message-box "Error" (format "Could not load history: ~a" (exn-message e))
-                                    #f (list 'ok 'stop))
-                       (exit 1))])
-              (history-load))
-            (for ([path (reverse sorted-history-paths)]
-                  #:when (or (file-exists? path) (directory-exists? path) (path-is-online? path)))
-              (add-to-list path))
+            (send frame set-status-text "Loading recents...")
+            (define recents
+              (with-handlers
+                ([exn? (lambda (e)
+                         (message-box "Error" (format "Could not load recents: ~a" (exn-message e))
+                                      #f (list 'ok 'stop))
+                         (exit 1))])
+                (load-recents)))
+            (add-to-list (stream-first recents))
             (send entries select 0)
-
-            (send frame set-status-text "Loading Windows' recent files...")
-            (for ([path (load-recents)]
+            (for ([path (stream-rest recents)]
                   #:when (or (file-exists? path) (directory-exists? path) (path-is-online? path)))
               (add-to-list path))
 
-            (send frame set-status-text "Searching...")
             (define start-time (current-seconds))
-            (for-each traverse-and-add-to-list (reverse sorted-history-paths))
+            (send frame set-status-text "Searching recents...")
+            (for-each traverse-and-add-to-list (stream->list recents))
+            (send frame set-status-text "Searching one level up...")
+            (define recents-one-level-up (parent-dirs-except-roots recents))
+            (for-each traverse-and-add-to-list recents-one-level-up)
+            (send frame set-status-text "Searching two levels up...")
+            (define recents-two-level-up (parent-dirs-except-roots recents-one-level-up))
+            (for-each traverse-and-add-to-list recents-two-level-up)
+            (send frame set-status-text "Searching local drives...")
             (for-each traverse-and-add-to-list (filesystem-root-list))
             (send frame set-status-text
                   (format "Scanned ~a entries in ~as"
