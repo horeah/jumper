@@ -17,6 +17,8 @@
 (define frame-height (/ screen-height 2))
 (define app-frame%
   (class frame%
+    (field (status-text ""))
+
     (super-new
      [label "Jumper"]
      [min-width frame-width] [min-height frame-height]
@@ -51,7 +53,15 @@
     (define/override (on-subwindow-event receiver event)
       (update-modifier-state event)
       (send filter-text focus)
-      #f)))
+      #f)
+
+    (define/override (set-status-text text [transient #f])
+      (unless transient (set! status-text text))
+      (super set-status-text text))
+
+    (define/public (reset-status-text)
+      (send this set-status-text status-text))))
+
 
 (define frame (new app-frame%))
 (send frame show #t)
@@ -92,7 +102,7 @@
   (set! update-thread (current-thread))
   (thread-suspend scan-thread)
   (send entries enable #f)
-  (send frame set-status-text "Searching...")
+  (send frame set-status-text "Filtering..." #t)
   (define num-entries 0)
   (define filtered-files
     (for/list ([path-item (reverse all-files)]
@@ -106,7 +116,7 @@
   (when (= num-entries MAX-ENTRIES) (send entries append SHOW-MORE))
   (when (> num-entries 0) (send entries select 0))
   (send entries enable #t)
-  (when (thread-dead? scan-thread) (send frame set-status-text ""))
+  (send frame reset-status-text)
   (thread-resume scan-thread))
 
 
@@ -221,8 +231,9 @@
             (send frame set-status-text "Searching two levels up...")
             (define recents-two-level-up (parent-dirs-except-roots recents-one-level-up))
             (for-each traverse-and-add-to-list recents-two-level-up)
-            (send frame set-status-text "Searching local drives...")
-            (for-each traverse-and-add-to-list (filesystem-root-list))
+            (for ([root (filesystem-root-list)])
+              (send frame set-status-text (format "Searching drive ~a..." root))
+              (traverse-and-add-to-list root))
             (send frame set-status-text
                   (format "Scanned ~a entries in ~as"
                           (length all-files)
