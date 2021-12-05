@@ -7,7 +7,7 @@
 (require racket/path)
 (require racket/stream)
 (require "scanner.rkt")
-(require "history.rkt")
+(require "recents.rkt")
 
 (define shift-down? #f)
 (define control-down? #f)
@@ -201,7 +201,7 @@
             (define recents
               (with-handlers
                 ([exn? (lambda (e)
-                         (message-box "Error" (format "Could not load recents: ~a" (exn-message e))
+                         (message-box "Error" (format "Error loading recents: ~a" (exn-message e))
                                       #f (list 'ok 'stop))
                          (exit 1))])
                 (load-recents)))

@@ -9,7 +9,7 @@
 (require ffi/com)
 (require net/uri-codec)
 
-(provide history-save history-bump history-decay path-is-online? load-recents)
+(provide history-save history-bump history-decay load-recents path-is-online?)
 
 (define HISTORY-FILE (build-path (getenv "APPDATA") "Jumper" "history"))
 (define history (make-hash))
@@ -48,16 +48,7 @@
                                (hash-set! history path new-weight)))))
 
 
-(define (load-recents)
-  (history-load)
-  (stream-append
-   sorted-history-paths
-   (load-recents-dir (build-path (getenv "APPDATA") "Microsoft\\Windows\\Recent"))
-   (load-recents-dir (build-path (getenv "APPDATA") "Microsoft\\Office\\Recent"))
-   (load-mru-cache (build-path (getenv "LOCALAPPDATA") "Microsoft\\Office\\16.0\\MruServiceCache"))))
-
-
-(define (load-recents-dir dir)
+(define (load-shortcuts-dir dir)
   (define shell (com-create-instance "WScript.Shell"))
   (define targets
     (for/stream ([path (directory-list dir #:build? #t)])
@@ -95,6 +86,15 @@
                              (for/stream ([doc (call-with-input-file doclist read-json)])
                                (string->path (hash-ref doc 'DocumentUrl))))))))
   result)
+
+
+(define (load-recents)
+  (history-load)
+  (stream-append
+   sorted-history-paths
+   (load-shortcuts-dir (build-path (getenv "APPDATA") "Microsoft\\Windows\\Recent"))
+   (load-shortcuts-dir (build-path (getenv "APPDATA") "Microsoft\\Office\\Recent"))
+   (load-mru-cache (build-path (getenv "LOCALAPPDATA") "Microsoft\\Office\\16.0\\MruServiceCache"))))
 
 
 (define (path-is-online? path)
