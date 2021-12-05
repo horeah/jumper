@@ -9,8 +9,7 @@
 (require ffi/com)
 (require net/uri-codec)
 
-(provide history-load history-save history-bump history-decay history sorted-history-paths
-         path-is-online? load-recents)
+(provide history-save history-bump history-decay path-is-online? load-recents)
 
 (define HISTORY-FILE (build-path (getenv "APPDATA") "Jumper" "history"))
 (define history (make-hash))
@@ -20,10 +19,10 @@
   (set! history
         (if (file-exists? HISTORY-FILE)
             (deserialize (call-with-input-file HISTORY-FILE read))
-            (make-hash (list (cons (find-system-path 'home-dir) 1)))))
+            (make-hash)))
   (set! sorted-history-paths
         (sort (hash-keys history)
-              (lambda (path1 path2) (< (hash-ref history path1) (hash-ref history path2))))))
+              (lambda (path1 path2) (> (hash-ref history path1) (hash-ref history path2))))))
 
 
 (define (history-save)
@@ -38,10 +37,7 @@
 (define (history-bump path amount)
   (define normalized-path
     (if (path-is-online? path) path (normalize-path path)))
-  (hash-set! history normalized-path (+ amount (hash-ref! history normalized-path 0)))
-  (unless (path-is-online? path)
-    (let-values ([(base name must-be-dir) (split-path path)])
-      (when (and (> amount 0) base) (history-bump base (floor (/ amount 2)))))))
+  (hash-set! history normalized-path (+ amount (hash-ref! history normalized-path 0))))
 
 
 (define (history-decay)
@@ -51,8 +47,11 @@
                                (hash-remove! history path)
                                (hash-set! history path new-weight)))))
 
+
 (define (load-recents)
-  (stream-append 
+  (history-load)
+  (stream-append
+   sorted-history-paths
    (load-recents-dir (build-path (getenv "APPDATA") "Microsoft\\Windows\\Recent"))
    (load-recents-dir (build-path (getenv "APPDATA") "Microsoft\\Office\\Recent"))
    (load-mru-cache (build-path (getenv "LOCALAPPDATA") "Microsoft\\Office\\16.0\\MruServiceCache"))))
