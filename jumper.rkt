@@ -152,7 +152,7 @@
   (if (equal? selection-string SHOW-MORE)
       (begin
         (set! MAX-ENTRIES (* 2 MAX-ENTRIES))
-        (update-list))
+        (thread update-list))
       (begin
         (history-bump selection-path 10)
         (history-decay)
