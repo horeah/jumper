@@ -1,10 +1,12 @@
 #lang racket/base
+(require racket/string)
 (provide traverse)
 
 
 (define EXCLUDED-PATHS
   (map (lambda (string)
-         (normal-case-path (simplify-path (path->complete-path (string->path string)))))
+         (path->directory-path (normal-case-path (simplify-path (path->complete-path
+                                                                 (string->path string))))))
        (list
         (getenv "ProgramFiles")
         (getenv "ProgramFiles(X86)")
@@ -20,8 +22,14 @@
 
 
 (define (exclude-path? path)
+  (define normalized-path
+    (path->string (path->directory-path (normal-case-path path))))
   (or
-   (member (normal-case-path (path->complete-path path)) EXCLUDED-PATHS)
+   (ormap (lambda (excluded-dir)
+            (string-prefix?
+             normalized-path
+             (path->string excluded-dir)))
+          EXCLUDED-PATHS)
    (let-values ([(base name must-be-dir) (split-path path)])
      (equal? (string-ref (path->string name) 0) #\.))))
 

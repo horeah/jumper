@@ -9,7 +9,8 @@
 (require ffi/com)
 (require net/uri-codec)
 
-(provide history-save history-bump history-decay load-recents path-is-online?)
+(provide history-save history-bump history-decay load-recents
+         path-is-http? path-is-local? path-maybe-exists? path-is-local-directory?)
 
 (define HISTORY-FILE (build-path (getenv "APPDATA") "Jumper" "history"))
 (define history (make-hash))
@@ -36,7 +37,7 @@
 
 (define (history-bump path amount)
   (define normalized-path
-    (if (path-is-online? path) path (normalize-path path)))
+    (if (path-is-http? path) path (normalize-path path)))
   (hash-set! history normalized-path (+ amount (hash-ref! history normalized-path 0))))
 
 
@@ -97,5 +98,19 @@
    (load-mru-cache (build-path (getenv "LOCALAPPDATA") "Microsoft\\Office\\16.0\\MruServiceCache"))))
 
 
-(define (path-is-online? path)
+(define (path-is-http? path)
   (string-prefix? (path->string path) "https:"))
+
+
+(define (path-is-local? path)
+  (equal? (string-ref (path->string path) 1) #\:))
+
+
+(define (path-is-local-directory? path)
+  (and (path-is-local? path) (directory-exists? path)))
+
+
+(define (path-maybe-exists? path)
+  (if (path-is-local-directory? path)
+      (or (file-exists? path) (directory-exists? path))
+      #t))
