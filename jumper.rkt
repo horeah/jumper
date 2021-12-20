@@ -173,7 +173,7 @@
           (history-save))
 
         (let ([command-prefix
-               (if (path-is-online? selection-path)
+               (if (path-is-http? selection-path)
                    (if control-down? "explorer" (string-append "start " (handler-app selection-path)))
                    (if control-down? "explorer /select," "explorer"))])
           (process (string-append command-prefix " \"" (path->string selection-path) "\"")))
@@ -198,12 +198,25 @@
 (define (traverse-and-add-to-list start)
   (traverse add-to-list start))
 
+(define (path-is-root? path)
+  (cond
+    [(path-is-local? path)
+     (member path (filesystem-root-list))]
+    [(path-is-http? path)
+     (= (length (string-split (substring (path->string path) (string-length "https://")) "/")) 2)]
+    [else (equal? (path->string path) "\\\\")]))
+
+
+(define (path-fix-https path)
+  (if (and path (path-is-http? path))
+      (string->path (string-replace (path->string path) "https:/" "https://" #:all? #f))
+      path))
+
 (define (parent-dirs-except-roots paths)
-  (filter (lambda (p) (and p (not (member p (filesystem-root-list)))))
-          (for/list ([path paths]
-                     #:unless (path-is-online? path))
+  (filter (lambda (p) (and p (not (path-is-root? p))))
+          (for/list ([path paths])
             (let-values ([(base name must-be-dir) (split-path path)])
-              base))))
+              (path-fix-https base)))))
 
 (define scan-thread
   (thread (lambda ()
@@ -217,20 +230,29 @@
                 (load-recents)))
             (add-to-list (stream-first recents))
             (send entries select 0)
-            (for ([path (stream-rest recents)]
-                  #:when (or (file-exists? path) (directory-exists? path) (path-is-online? path)))
+            (for ([path (stream-rest recents)] #:when (path-maybe-exists? path))
               (add-to-list path))
             (define recents-list (map path-item-path all-files))
 
             (define start-time (current-seconds))
             (send frame set-status-text "Searching recents...")
-            (for-each traverse-and-add-to-list recents-list)
+            (for ([path recents-list] #:when (path-is-local-directory? path))
+              (traverse-and-add-to-list path))
+
             (send frame set-status-text "Searching one level up...")
             (define recents-one-level-up (parent-dirs-except-roots recents-list))
-            (for-each traverse-and-add-to-list recents-one-level-up)
+            (for ([path recents-one-level-up] #:when (path-maybe-exists? path))
+              (add-to-list path))
+            (for ([path recents-one-level-up] #:when (path-is-local-directory? path))
+              (traverse-and-add-to-list path))
+
             (send frame set-status-text "Searching two levels up...")
             (define recents-two-level-up (parent-dirs-except-roots recents-one-level-up))
-            (for-each traverse-and-add-to-list recents-two-level-up)
+            (for ([path recents-two-level-up] #:when (path-maybe-exists? path))
+              (add-to-list path))
+            (for ([path recents-two-level-up] #:when (path-is-local-directory? path))
+              (traverse-and-add-to-list path))
+
             (for ([root (filesystem-root-list)])
               (send frame set-status-text (format "Searching drive ~a..." root))
               (traverse-and-add-to-list root))
