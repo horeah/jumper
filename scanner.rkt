@@ -34,23 +34,26 @@
      (equal? (string-ref (path->string name) 0) #\.))))
 
 
-(define (traverse-robust proc traverse? start)
-  (when (traverse? start)
+(define (traverse-robust proc traverse? start depth)
+  (when (and
+         (> depth 0)
+         (traverse? start))
     (define entries (with-handlers ([exn? (lambda (exn) '())])
                       (map (lambda (entry) (build-path start entry))
                            (directory-list start))))
     (for ([entry entries])
       (proc entry)
       (when (equal? (file-or-directory-type entry) 'directory)
-        (traverse-robust proc traverse? entry)))))
+        (traverse-robust proc traverse? entry (- depth 1))))))
 
 
 (define already-traversed (make-hash))
-(define (traverse proc start)
+(define (traverse proc start [depth +inf.0])
   (traverse-robust
    proc
    (lambda (path) (and
                    (not (exclude-path? path))
-                   (not (hash-has-key? already-traversed path))
-                   (hash-set! already-traversed path #t)))
-   start))
+                   (> depth (hash-ref already-traversed path 0))
+                   (hash-set! already-traversed path depth)))
+   start
+   depth))

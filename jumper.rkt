@@ -195,8 +195,8 @@
         [(= (send entries get-number) MAX-ENTRIES)
          (send entries append SHOW-MORE)]))))
 
-(define (traverse-and-add-to-list start)
-  (traverse add-to-list start))
+(define (traverse-and-add-to-list start [depth +inf.0])
+  (traverse add-to-list start depth))
 
 (define (path-is-root? path)
   (cond
@@ -237,21 +237,21 @@
             (define start-time (current-seconds))
             (send frame set-status-text "Searching recents...")
             (for ([path recents-list] #:when (path-is-local-directory? path))
-              (traverse-and-add-to-list path))
+              (traverse-and-add-to-list path 3))
 
             (send frame set-status-text "Searching one level up...")
             (define recents-one-level-up (parent-dirs-except-roots recents-list))
             (for ([path recents-one-level-up] #:when (path-maybe-exists? path))
               (add-to-list path))
             (for ([path recents-one-level-up] #:when (path-is-local-directory? path))
-              (traverse-and-add-to-list path))
+              (traverse-and-add-to-list path 3))
 
             (send frame set-status-text "Searching two levels up...")
             (define recents-two-level-up (parent-dirs-except-roots recents-one-level-up))
             (for ([path recents-two-level-up] #:when (path-maybe-exists? path))
               (add-to-list path))
             (for ([path recents-two-level-up] #:when (path-is-local-directory? path))
-              (traverse-and-add-to-list path))
+              (traverse-and-add-to-list path 3))
 
             (for ([root (filesystem-root-list)])
               (send frame set-status-text (format "Searching drive ~a..." root))
