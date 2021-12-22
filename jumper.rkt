@@ -172,11 +172,18 @@
                                            #f (list 'ok 'stop)))])
           (history-save))
 
-        (let ([command-prefix
-               (if (path-is-http? selection-path)
-                   (if control-down? "explorer" (string-append "start " (handler-app selection-path)))
-                   (if control-down? "explorer /select," "explorer"))])
-          (process (string-append command-prefix " \"" (path->string selection-path) "\"")))
+        (let*-values ([(base-path name must-be-dir) (split-path selection-path)]
+                     [(selection-string) (string-append "\"" (path->string selection-path) "\"")]
+                     [(base-string) (string-append "\"" (path->string base-path) "\"")]
+                     [(command-tokens)
+                      (if (path-is-http? selection-path)
+                          (if control-down?
+                              (list "explorer" base-string)
+                              (list "start" (handler-app selection-path) selection-string))
+                          (if control-down?
+                              (list "explorer" "/select," selection-string)
+                              (list "explorer" selection-string)))])
+          (process (string-join command-tokens)))
         (when (not shift-down?) (exit)))))
 
 (define all-files (list))
@@ -205,7 +212,6 @@
     [(path-is-http? path)
      (= (length (string-split (substring (path->string path) (string-length "https://")) "/")) 2)]
     [else (equal? (path->string path) "\\\\")]))
-
 
 (define (path-fix-https path)
   (if (and path (path-is-http? path))
