@@ -111,6 +111,6 @@
 
 
 (define (path-maybe-exists? path)
-  (if (path-is-local-directory? path)
+  (if (path-is-local? path)
       (or (file-exists? path) (directory-exists? path))
       #t))

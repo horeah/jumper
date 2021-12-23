@@ -238,7 +238,7 @@
             (send entries select 0)
             (for ([path (stream-rest recents)] #:when (path-maybe-exists? path))
               (add-to-list path))
-            (define recents-list (map path-item-path all-files))
+            (define recents-list (stream->list recents))
 
             (define start-time (current-seconds))
             (send frame set-status-text "Searching recents...")
