@@ -71,7 +71,10 @@
 (define SHOW-MORE "<show more entries>")
 
 (define (path->entry path)
-  (define path-string (path->string path))
+  (define path-string (path->string
+                       (if (and (path-is-local? path) (directory-exists? path))
+                           (path->directory-path path)
+                           path)))
   (define path-string-len (string-length path-string))
   (define half-len (- (exact-floor (/ MAX-ENTRY-LEN 2)) 2))
   (if (< path-string-len MAX-ENTRY-LEN)
