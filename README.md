@@ -32,4 +32,4 @@ There is no installer, so the recommended "installation" process goes like this:
  1. Unpack the distribution zip somewhere on your hard drive
  2. Navigate to the extracted directory and run "jumper.exe"
  3. Right-click on Jumper's taskbar entry and click "Pin to taskbar"
- 4. [optional] Right-click on the taskbar entry, then right-click on "Jumper", then "Properties"; add a "Shortcut key" such as "Ctrl-Alt-J" to be able to start Jumper at any time using your keyboard
+ 4. [optional] Right-click on the taskbar entry, then right-click on "Racket GUI Application", then "Properties"; add a "Shortcut key" such as "Ctrl-Alt-J" to be able to start Jumper at any time using your keyboard
