@@ -168,7 +168,7 @@
         (set! MAX-ENTRIES (* 2 MAX-ENTRIES))
         (thread update-list))
       (begin
-        (history-bump selection-path 10)
+        (history-bump selection-path 50)
         (history-decay)
         (with-handlers ([exn? (lambda (e) (message-box
                                            "Error" (format "Could not save history: ~a" (exn-message e))
