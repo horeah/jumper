@@ -90,12 +90,18 @@
 
 
 (define (load-recents)
+  (define (when-dir-exists function dir)
+    (if (directory-exists? dir)
+        (function dir)
+        null))
   (history-load)
   (stream-append
    sorted-history-paths
    (load-shortcuts-dir (build-path (getenv "APPDATA") "Microsoft\\Windows\\Recent"))
-   (load-shortcuts-dir (build-path (getenv "APPDATA") "Microsoft\\Office\\Recent"))
-   (load-mru-cache (build-path (getenv "LOCALAPPDATA") "Microsoft\\Office\\16.0\\MruServiceCache"))))
+   (when-dir-exists
+    load-shortcuts-dir (build-path (getenv "APPDATA") "Microsoft\\Office\\Recent"))
+   (when-dir-exists
+    load-mru-cache (build-path (getenv "LOCALAPPDATA") "Microsoft\\Office\\16.0\\MruServiceCache"))))
 
 
 (define (path-is-http? path)
