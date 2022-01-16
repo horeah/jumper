@@ -134,7 +134,7 @@
        [label "Jump To"]
        [callback (lambda (text event)
                    (case (send event get-event-type)
-                     ['text-field-enter (open-selected-entry)]
+                     ['text-field-enter (when (send entries get-selection) (open-selected-entry))]
                      ['text-field (trigger-update-list)]))]
        [parent frame]))
 (send filter-text focus)
